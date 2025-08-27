@@ -135,6 +135,14 @@ async function runConversionScript(scriptPath: string, inputFile: string): Promi
             await fs.promises.unlink(jsonPath);
             
             console.log(`✅ Successfully parsed ${results.length} results from JSON`);
+            
+            // Check if script reported failure (fail-fast mode)
+            if (results.length > 0 && results[0]?.success === false) {
+              console.error('❌ Script reported failure:', results[0].error);
+              reject(new Error(`Conversion failed: ${results[0].error}`));
+              return;
+            }
+            
             resolve(results);
           } else {
             // Fallback: try to parse from stdout

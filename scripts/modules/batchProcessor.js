@@ -22,41 +22,37 @@ class BatchProcessor {
     const results = [];
     const errors = [];
     
-    console.log(`Processing ${urls.length} URLs with concurrency limit of ${this.config.MAX_CONCURRENT}`);
+    console.log(`🚨 Processing ${urls.length} URLs with FAIL-FAST mode enabled`);
+    console.log(`⚡ Will terminate immediately on first failure`);
     
     // Process URLs in batches according to MAX_CONCURRENT
     for (let i = 0; i < urls.length; i += this.config.MAX_CONCURRENT) {
       const batch = urls.slice(i, i + this.config.MAX_CONCURRENT);
-      console.log(`\nProcessing batch ${Math.floor(i / this.config.MAX_CONCURRENT) + 1} (${batch.length} URLs)`);
+      console.log(`\n🔄 Processing batch ${Math.floor(i / this.config.MAX_CONCURRENT) + 1} (${batch.length} URLs)`);
       
       const batchPromises = batch.map((urlData, index) => 
         this.processUrl(urlData, i + index + 1, urls.length)
       );
       
       try {
-        const batchResults = await Promise.allSettled(batchPromises);
-        
-        batchResults.forEach((result, index) => {
-          if (result.status === 'fulfilled') {
-            results.push(result.value);
-          } else {
-            const urlData = batch[index];
-            const error = {
-              url: urlData.url,
-              error: result.reason?.message || 'Unknown error'
-            };
-            console.error(`Error processing ${urlData.url}:`, error.error);
-            errors.push(error);
-          }
-        });
+        // Use Promise.all instead of Promise.allSettled - fails fast on first error
+        const batchResults = await Promise.all(batchPromises);
+        results.push(...batchResults);
+        console.log(`✅ Batch ${Math.floor(i / this.config.MAX_CONCURRENT) + 1} completed successfully`);
         
       } catch (error) {
-        console.error('Batch processing error:', error);
-        errors.push({ batch: i, error: error.message });
+        // First error encountered - terminate immediately
+        console.error(`💥 BATCH FAILED: Error in batch ${Math.floor(i / this.config.MAX_CONCURRENT) + 1}`);
+        console.error(`💥 Failing error: ${error.message}`);
+        console.error(`🛑 TERMINATING ENTIRE PROCESS - No further URLs will be processed`);
+        
+        // Return failure immediately - don't process remaining batches
+        throw new Error(`Conversion terminated due to failure: ${error.message}`);
       }
     }
     
-    return { results, errors };
+    console.log(`🎉 ALL ${urls.length} URLs processed successfully - No failures detected`);
+    return { results, errors: [] };
   }
 
   /**

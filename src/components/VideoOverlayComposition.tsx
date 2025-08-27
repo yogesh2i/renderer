@@ -2,35 +2,36 @@
 import React, { useEffect } from 'react';
 import { Video, AbsoluteFill, Sequence, OffthreadVideo, prefetch } from 'remotion';
 
-interface LayerData {
-  url: string;
-  start: number;
-  duration: number;
+interface VideoData {
+  media_url: string;
+  start_frame: number;
+  end_frame: number;
   videoUrl?: string | null;
   isConverted?: boolean;
 }
 
 interface VideoOverlayCompositionProps {
-  layers?: LayerData[];
-  baseVideo?: string;
+  videos?: VideoData[];
+  baseVideo?: {
+    url: string;
+  };
+  width?: number;
+  height?: number;
+  duration?: number;
 }
 
-// Helper function to calculate frames using your format
-const calculateFrames = (
-  display: { from: number; to: number },
-  fps: number
-) => {
-  const from = (display.from ) * fps;
-  const durationInFrames = (display.to ) * fps - from;
-  return { from, durationInFrames };
-};
-
 export const VideoOverlayComposition: React.FC<VideoOverlayCompositionProps> = ({ 
-  layers,
-  baseVideo
+  videos = [],
+  baseVideo,
+  width = 1080,
+  height = 1920,
+  duration = 10
 }) => {
   const fps = 30;
+  const totalFrames = Math.round(duration * fps);
   
+  console.log(`🎬 Composition: ${width}x${height}, ${duration}s (${totalFrames} frames)`);
+  console.log(`📹 Videos to render: ${videos.length}`);
 
 //   const allConverted = layersWithVideos ? layersWithVideos.every((layer: LayerData) => layer.isConverted) : false;
   
@@ -51,38 +52,42 @@ export const VideoOverlayComposition: React.FC<VideoOverlayCompositionProps> = (
   return (
     
     <AbsoluteFill>
-          <Sequence from={0} durationInFrames={Infinity}>
+          <Sequence from={0} durationInFrames={totalFrames}>
             <OffthreadVideo
               src={baseVideo.url}
               pauseWhenBuffering={true}
               style={{ 
-                width: '100%', 
-                height: '100%',
+                width, 
+                height,
+                objectFit: 'cover',
+                position: 'absolute',
+                top: 0,
+                left: 0
               }}
             />
           </Sequence>
           
-          {/* Render all layers - only show when all are converted */}
-          {layers.map((layer: LayerData, index: number) => {
-            const display = {
-              from: layer.start,
-              to: (layer.start + layer.duration)
-            };
-            const { from, durationInFrames } = calculateFrames(display, fps);
+          {/* Render all video overlays using frame-based positioning */}
+          {videos.map((video: VideoData, index: number) => {
+            // Use frames directly - no conversion needed!
+            const durationInFrames = video.end_frame - video.start_frame;
             
             return (
               <Sequence 
                 key={index}
-                from={from} 
+                from={video.start_frame} 
                 durationInFrames={durationInFrames}
                 premountFor={60}
               >
-                <Video
-                  src={layer.videoUrl!}
+                <OffthreadVideo
+                  src={video.videoUrl!}
                   style={{ 
-                    width: '100%', 
-                    height: '100%',
-                    objectFit: 'cover'
+                    width, 
+                    height,
+                    objectFit: 'cover',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0
                   }}
                 />
               </Sequence>

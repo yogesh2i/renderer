@@ -8,7 +8,7 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 
 const DEFAULT_CONFIG = {
   OUTPUT_DIR: './converted-videos',
-  MAX_CONCURRENT: 10,
+  MAX_CONCURRENT: 2,
   DEFAULT_DURATION: 10
 };
 

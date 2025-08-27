@@ -35,46 +35,54 @@ class Recorder {
       
       // First load page WITHOUT recording (optimization)
       let context1 = await browser.newContext({
-        viewport: { width: 1280, height: 720 }
+        viewport: { width: 1080, height: 1920 }
       });
 
       const loadingPage = await context1.newPage();
       
-      console.log('Loading website (no recording)...');
+      console.log('📥 Loading website (no recording)...');
       
-      // Navigate and wait for page to load - NOT RECORDED
-      await loadingPage.goto(url, { 
-        waitUntil: 'networkidle', 
-        timeout: 30000 
-      });
+      try {
+        // Navigate and wait for page to load - NOT RECORDED
+        await loadingPage.goto(url, { 
+          waitUntil: 'networkidle', 
+          timeout: 30000 
+        });
+      } catch (navigationError) {
+        throw new Error(`Failed to load ${url}: ${navigationError.message}`);
+      }
       
       // Wait for content to stabilize - NOT RECORDED
-      console.log('Waiting for content to load (not recorded)...');
+      console.log('⏳ Waiting for content to load (not recorded)...');
       await loadingPage.waitForTimeout(3000);
       
       // Close loading context
       await context1.close();
       
       // NOW create recording context
-      console.log('Starting recording context...');
+      console.log('🎥 Starting recording context...');
       context = await browser.newContext({
-        viewport: { width: 1280, height: 720 },
+        viewport: { width: 1080, height: 1920 },
         recordVideo: {
           dir: outputDir,
-          size: { width: 1280, height: 720 }
+          size: { width: 1080, height: 1920 }
         }
       });
 
       const page = await context.newPage();
       
-      // Navigate again (this time with recording) - should be fast since content is cached
-      await page.goto(url, { 
-        waitUntil: 'domcontentloaded', // Faster since page was pre-loaded
-        timeout: 15000 
-      });
+      try {
+        // Navigate again (this time with recording) - should be fast since content is cached
+        await page.goto(url, { 
+          waitUntil: 'domcontentloaded', // Faster since page was pre-loaded
+          timeout: 15000 
+        });
+      } catch (recordingNavigationError) {
+        throw new Error(`Failed to navigate during recording ${url}: ${recordingNavigationError.message}`);
+      }
       
       // Record ONLY for the specified duration
-      console.log(`Recording for exactly ${duration} seconds...`);
+      console.log(`⏱️  Recording for exactly ${duration} seconds...`);
       await page.waitForTimeout(duration * 1000);
       
       console.log('Recording completed, finalizing...');
@@ -92,8 +100,10 @@ class Recorder {
       return { video, timestamp, outputDir };
       
     } catch (error) {
-      console.error('Recording error:', error);
-      throw new Error(`Recording failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`❌ Recording failed for ${url}:`, error.message);
+      
+      // Throw with clear context for fail-fast behavior
+      throw new Error(`Recording failed for ${url}: ${error.message}`);
     } finally {
       try {
         if (context) await context.close();

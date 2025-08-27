@@ -6,7 +6,7 @@ async function waitForVideoFile(video, maxWaitTime = 60000) {
   let lastSize = 0;
   let stableCount = 0;
   
-  console.log('Waiting for video file...');
+  console.log('⏳ Waiting for video file...');
   
   while (Date.now() - startTime < maxWaitTime) {
     try {
@@ -24,14 +24,14 @@ async function waitForVideoFile(video, maxWaitTime = 60000) {
         const stats = fs.statSync(videoPath);
         const currentSize = stats.size;
         
-        console.log(`Video file size: ${Math.round(currentSize / 1024)}KB`);
+        console.log(`📹 Video file size: ${Math.round(currentSize / 1024)}KB`);
         
         if (currentSize > 0) {
           // Check if size is stable (your stability detection)
           if (currentSize === lastSize) {
             stableCount++;
             if (stableCount >= 3) {
-              console.log('Video file ready');
+              console.log('✅ Video file ready');
               return videoPath; // Ensure we return the path here
             }
           } else {
@@ -44,14 +44,14 @@ async function waitForVideoFile(video, maxWaitTime = 60000) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
     } catch (error) {
-      console.error('Error waiting for video file:', error);
+      console.error('❌ Error waiting for video file:', error.message);
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
   
-  // If we get here, we timed out
+  // If we get here, we timed out - this should trigger fail-fast
   const errorMsg = `Video file not ready within timeout (${maxWaitTime}ms). VideoPath: ${videoPath}`;
-  console.error(errorMsg);
+  console.error(`💥 ${errorMsg}`);
   throw new Error(errorMsg);
 }
 
@@ -78,6 +78,19 @@ function writeJSONResults(results, outputPath) {
   console.log(`📄 JSON results written to: ${outputPath}`);
 }
 
+// Add new function to write failure results immediately
+function writeFailureResult(error, outputPath) {
+  const failureResult = {
+    success: false,
+    error: error.message,
+    timestamp: new Date().toISOString(),
+    terminatedEarly: true
+  };
+  
+  fs.writeFileSync(outputPath, JSON.stringify([failureResult], null, 2));
+  console.log(`💥 Failure result written to: ${outputPath}`);
+}
+
 function getFileStats(filePath) {
   if (fs.existsSync(filePath)) {
     const stats = fs.statSync(filePath);
@@ -94,5 +107,6 @@ module.exports = {
   moveToFinalLocation,
   cleanupTempFiles,
   writeJSONResults,
+  writeFailureResult,
   getFileStats
 };

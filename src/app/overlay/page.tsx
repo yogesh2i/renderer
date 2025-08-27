@@ -25,35 +25,57 @@ import React, { useState, useEffect } from 'react';
 import RemotionPlayer from '../../remotion/RemotionPlayer';
 import { VideoOverlayComposition } from '../../components/VideoOverlayComposition';
 
-interface LayerData {
-  url: string;
-  start: number;
-  duration: number;
+interface VideoData {
+  media_url: string;
+  start_frame: number;
+  end_frame: number;
   videoUrl?: string | null;
   isConverted?: boolean;
 }
 
 const defaultData = {
-  baseVideo: {
-    url: "https://d2ra5fstrqw46p.cloudfront.net/videos/1754991923_9065.mp4"
-  },
-  layers: [
-      {
-          url: "https://project-animated-interview-scene-with-bill-gates-543.magicpatterns.app/",
-      start: 3,
-      duration: 3
+  base_url: "https://d2ra5fstrqw46p.cloudfront.net/videos/1755001474_6631.mp4",
+  videos: [
+    {
+      media_url: "https://project-career-crossroads-animation-344.magicpatterns.app/",
+      start_frame: 139,
+      end_frame: 339
     },
     {
-      url: "https://project-animated-lightbulb-to-graduation-cap-transition-710.magicpatterns.app/",
-      start: 9,
-      duration: 3
+      media_url: "https://project-vinod-khosla-interview-component-123.magicpatterns.app/",
+      start_frame: 561,
+      end_frame: 761
     },
     {
-      url: "https://project-animated-typewriter-text-display-910.magicpatterns.app/",
-      start: 15,
-      duration: 3
+      media_url: "https://project-animated-technological-timeline-215.magicpatterns.app/",
+      start_frame: 937,
+      end_frame: 1137
     },
-   
+    {
+      media_url: "https://project-split-screen-evolution-animation-413.magicpatterns.app/",
+      start_frame: 1470,
+      end_frame: 1670
+    },
+    {
+      media_url: "https://project-vintage-to-smart-tv-transition-animation-278.magicpatterns.app/",
+      start_frame: 2019,
+      end_frame: 2219
+    },
+    {
+      media_url: "https://project-water-tap-overflow-animation-874.magicpatterns.app/",
+      start_frame: 2871,
+      end_frame: 3071
+    },
+    {
+      media_url: "https://project-ai-workforce-progress-animation-882.magicpatterns.app/",
+      start_frame: 4073,
+      end_frame: 4273
+    },
+    {
+      media_url: "https://project-ai-driven-time-progression-animation-346.magicpatterns.app/",
+      start_frame: 4824,
+      end_frame: 5024
+    }
   ]
 };
 
@@ -64,7 +86,7 @@ const Page: React.FC = () => {
   const [renderError, setRenderError] = useState<string | null>(null);
   
   // URL conversion states
-  const [layersWithVideos, setLayersWithVideos] = useState<LayerData[]>([]);
+  const [videosWithConverted, setVideosWithConverted] = useState<VideoData[]>([]);
   const [isConverting, setIsConverting] = useState(true);
   const [conversionError, setConversionError] = useState<string | null>(null);
 
@@ -82,7 +104,7 @@ const Page: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          urls: defaultData.layers.map((layer) => layer.url),
+          urls: defaultData.videos.map((video) => video.media_url),
           duration: 10
         })
       });
@@ -92,23 +114,23 @@ const Page: React.FC = () => {
       if (result.success) {
         console.log('✅ Conversion successful:', result);
         
-        // Update layers with converted video URLs
-        const updatedLayers = defaultData.layers.map((layer) => {
+        // Update videos with converted video URLs
+        const updatedVideos = defaultData.videos.map((video) => {
           // Find matching converted video by original URL
-          const convertedVideo = result.videoUrls.find((video: any) => 
-            video.originalUrl === layer.url
+          const convertedVideo = result.results.find((convertedVid: any) => 
+            convertedVid.originalUrl === video.media_url
           );
           
           return {
-            ...layer,
+            ...video,
             videoUrl: convertedVideo ? convertedVideo.videoUrl : null,
             isConverted: !!convertedVideo
           };
         });
         
-        setLayersWithVideos(updatedLayers);
+        setVideosWithConverted(updatedVideos);
         
-        const allConverted = updatedLayers.every(layer => layer.isConverted);
+        const allConverted = updatedVideos.every((video) => video.isConverted);
         console.log(`📊 Conversion status: ${allConverted ? 'All converted' : 'Some failed'}`);
         
       } else {
@@ -126,14 +148,18 @@ const Page: React.FC = () => {
   const handleRender = async () => {
     setIsRendering(true);
     setRenderError(null);
-    console.log(layersWithVideos);
+    console.log(defaultData.base_url);
+    console.log(videosWithConverted);
     try {
       const response = await fetch('/api/overlay', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({baseVideo: defaultData.baseVideo, layers: layersWithVideos})
+        body: JSON.stringify({
+          baseVideo: { url: defaultData.base_url }, 
+          layers: videosWithConverted
+        })
       });
 
       const data = await response.json();
@@ -183,20 +209,7 @@ const Page: React.FC = () => {
         </div>
       )}
       
-      {/* Preview Player */}
-      <div className="w-full h-[500px] bg-black rounded-lg p-4 mb-6">
-        <RemotionPlayer
-          component={VideoOverlayComposition}
-          inputProps={{
-            layersWithVideos: layersWithVideos,
-            isLoading: isConverting,
-            baseVideoUrl: defaultData.baseVideo.url
-          }}
-          durationInFrames={1200} 
-          fps={30}
-        />
-      </div>
-
+     
       {/* Render Button */}
       <div className="flex justify-center mb-6">
         <button
@@ -239,16 +252,14 @@ const Page: React.FC = () => {
       {renderedVideoUrl && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-6">
           <h3 className="text-xl font-semibold mb-4 text-green-800">✅ Video Rendered Successfully!</h3>
-          <div className="bg-black rounded-lg p-4 mb-4">
+     
             <video 
               src={renderedVideoUrl} 
               controls 
-              className="w-full h-auto rounded"
-              style={{ maxHeight: '400px' }}
+              className="rounded"
             >
               Your browser does not support the video tag.
             </video>
-          </div>
           <div className="flex flex-wrap gap-3">
             <a
               href={renderedVideoUrl}

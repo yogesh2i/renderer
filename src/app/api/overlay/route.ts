@@ -1,12 +1,26 @@
 import { openBrowser, renderMedia, selectComposition } from '@remotion/renderer';
+import {parseMedia} from '@remotion/media-parser';
+
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
 import puppeteer from 'puppeteer';
+
+const getVideoMetadata = async (url)=>{
+
+  const {durationInSeconds, dimensions} = await parseMedia({src: url, fields: {durationInSeconds: true, dimensions: true}});
+  return {duration: durationInSeconds, width: dimensions.width, height: dimensions.height};
+}
+
 export const POST = async (request: NextRequest) => {
   try {
    
     const {baseVideo, layers} = await request.json();
+
+    console.log(`📊 Received ${layers.length} video overlays for rendering`);
+    
+    const { duration, width, height } = await getVideoMetadata(baseVideo.url);
+    console.log(`📐 Base video: ${width}x${height}, ${duration}s duration`);
 
     const bundleInfoPath = path.join(process.cwd(), 'bundle-info.json');
     if (!fs.existsSync(bundleInfoPath)) {
@@ -19,7 +33,13 @@ export const POST = async (request: NextRequest) => {
     const composition = await selectComposition({
       serveUrl: bundleLocation,
       id: 'overlay-frame',
-      inputProps: {baseVideo,layers}
+      inputProps: {
+        baseVideo, 
+        videos: layers,  // Use 'videos' instead of 'layers' to match component
+        width, 
+        height, 
+        duration
+      }
     });
 
     const timestamp = Date.now();
@@ -36,8 +56,7 @@ export const POST = async (request: NextRequest) => {
 
     });
     const chromiumPath = puppeteer.executablePath();
-//     const {waitUntilDone, free} = prefetch(url);
-// await waitUntilDone();
+
     await renderMedia({
       composition,
       serveUrl: bundleLocation,
@@ -45,9 +64,11 @@ export const POST = async (request: NextRequest) => {
       puppeteerInstance: browser,
       browserExecutable: chromiumPath,
       outputLocation,
-      inputProps: {baseVideo,layers},
+      inputProps: {baseVideo, layers, width, height, duration},
       timeoutInMilliseconds: 180000,
       concurrency: 1,
+      // Use the detected resolution for rendering
+      scale: 1,
       onProgress: ({ progress }) => {
         console.log(`Rendering progress: ${(progress * 100).toFixed(1)}%`);
       },
