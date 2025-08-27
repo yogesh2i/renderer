@@ -1,6 +1,6 @@
 'use client'
-import React, { useEffect } from 'react';
-import { Video, AbsoluteFill, Sequence, OffthreadVideo, prefetch } from 'remotion';
+import React from 'react';
+import { AbsoluteFill, Sequence, OffthreadVideo} from 'remotion';
 
 interface VideoData {
   media_url: string;
@@ -33,21 +33,6 @@ export const VideoOverlayComposition: React.FC<VideoOverlayCompositionProps> = (
   console.log(`🎬 Composition: ${width}x${height}, ${duration}s (${totalFrames} frames)`);
   console.log(`📹 Videos to render: ${videos.length}`);
 
-//   const allConverted = layersWithVideos ? layersWithVideos.every((layer: LayerData) => layer.isConverted) : false;
-  
-//   useEffect(() => {
-//     // Prefetch the base video
-//     prefetch(defaultData.baseVideo.url);
-    
-//     // Prefetch video URLs if available, otherwise prefetch original URLs
-//     layers.forEach(layer => {
-//       if (layer.videoUrl) {
-//         prefetch(layer.videoUrl);
-//       } else {
-//         prefetch(layer.url);
-//       }
-//     });
-//   }, [layers]);
   if(baseVideo){
   return (
     
