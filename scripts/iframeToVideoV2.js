@@ -59,7 +59,7 @@ function sanitizeUrl(url) {
   return url.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9]/g, '_');
 }
 
-async function captureScreenshotsToVideo(url, duration = 10, fps = 5, outputDir = './screenshots', publicDir = './public') {
+async function captureScreenshotsToVideo(url, duration, fps, outputDir = './screenshots', publicDir = './public') {
   const browser = await chromium.launch();
   const context = await browser.newContext({
     viewport: { width: 1080, height: 1920 }
@@ -68,19 +68,19 @@ async function captureScreenshotsToVideo(url, duration = 10, fps = 5, outputDir 
   const page = await context.newPage();
 
   console.log("Navigating the page");
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto(url, { timeout: 30000 });
 
   // Prepare output directory
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
   if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
 
   const totalFrames = duration * fps;
-  const interval = 100;
+  // const interval = 1000;
   console.log("Taking screenshots...")
   for (let i = 0; i < totalFrames; i++) {
     const imgPath = path.join(outputDir, `frame_${String(i).padStart(4, '0')}.png`);
     await page.screenshot({ path: imgPath });
-    await page.waitForTimeout(interval);
+    // await page.waitForTimeout(interval);
   }
 
   await browser.close();
@@ -89,6 +89,7 @@ async function captureScreenshotsToVideo(url, duration = 10, fps = 5, outputDir 
   const baseName = sanitizeUrl(url);
   const videoOut = path.join(publicDir, `${baseName}.mp4`);
   console.log("Creating video");
+  
   // Use FFmpeg to create video from images
   await new Promise((resolve, reject) => {
     ffmpeg()
@@ -112,8 +113,8 @@ async function captureScreenshotsToVideo(url, duration = 10, fps = 5, outputDir 
 // Usage
 captureScreenshotsToVideo(
   'https://project-ai-workforce-progress-animation-882.magicpatterns.app/',
-  10, // duration in seconds
-  60,  // fps
+  3, // duration in seconds
+60,    // fps
   './screenshots',
   './public'
 )
