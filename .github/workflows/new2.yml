@@ -1,4 +1,4 @@
-name: Test Video new
+name: Test Video new changed
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   test-conversion:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 30
     
     steps:
