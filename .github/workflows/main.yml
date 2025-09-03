@@ -1,122 +1,17 @@
-name: Test Video Converter SDK
+ name: CI
 
-on:
-  workflow_dispatch:
-  push:
-    branches: [ screenshot ]
-    paths: 
-      - 'video-converter-sdk/**'
-  pull_request:
-    branches: [ screenshot ]
-    paths:
-      - 'video-converter-sdk/**'
+ on:
+   push:
+     branches:
+       - main
 
-jobs:
-  test-conversion:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-     
-        
-          
-    - name: Install SDK dependencies
-      working-directory: ./video-converter-sdk
-      run: |
-        npm ci
-        npx playwright install chromium
-        npx playwright install-deps chromium    # ← This installs all needed system deps
-        
-    - name: Create test input
-      run: |
-        cat > test-input.json << 'EOF'
-        {
-          "base_url": "https://example.com/original-video.mp4",
-          "videos": [
-            {
-              "media_url": "https://project-ai-workforce-progress-animation-882.magicpatterns.app/",
-              "start_frame": 1,
-              "end_frame": 60
-            }
-          ]
-        }
-        EOF
-        
-        echo "📋 Test Input:"
-        cat test-input.json | jq .
-        
-    - name: Create output directories
-      run: |
-        mkdir -p public/converted-videos
-        mkdir -p temp/screenshots
-        
-    - name: Run SDK test
-      working-directory: ./video-converter-sdk
-      env:
-        GITHUB_ACTIONS: true
-        OUTPUT_FILE: ../test-output.json
-        DISPLAY: ':99'
-      run: |
-        # Start virtual display
-        Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
-        sleep 2
-        
-        echo "🎬 Testing Video Converter SDK..."
-        echo "================================"
-        
-        # Run the CLI with test input
-        node cli.js ../test-input.json
-        
-    - name: Verify results
-      run: |
-        echo "🔍 Checking test results..."
-        
-        if [ -f test-output.json ]; then
-          echo "✅ Output file created successfully"
-          echo ""
-          echo "📊 Test Results:"
-          cat test-output.json | jq .
-          
-          # Check if conversion was successful
-          ERROR=$(jq -r '.error // false' test-output.json)
-          if [ "$ERROR" != "false" ] && [ "$ERROR" != "null" ]; then
-            echo "❌ Test failed with error"
-            exit 1
-          fi
-          
-          VIDEO_COUNT=$(jq -r '.videos | length' test-output.json 2>/dev/null || echo "0")
-          echo ""
-          echo "✅ Test passed! Processed $VIDEO_COUNT video(s)"
-          
-        else
-          echo "❌ No output file found - test failed"
-          exit 1
-        fi
-        
-    - name: Upload test artifacts
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: test-results-${{ github.run_id }}
-        path: |
-          public/converted-videos/
-          test-output.json
-          test-input.json
-        retention-days: 7
-        
-    - name: Upload debug info on failure
-      uses: actions/upload-artifact@v4
-      if: failure()
-      with:
-        name: debug-logs-${{ github.run_id }}
-        path: |
-          temp/
-          video-converter-sdk/*.log
-        retention-days: 3
+ jobs:
+   build:
+     runs-on: ubuntu-latest
+
+     steps:
+       - name: Get Your Code
+         uses: actions/checkout@v2
+
+       - name: Say Hello to the World
+         run: echo "Hello, World!"
