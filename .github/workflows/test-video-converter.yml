@@ -1,4 +1,4 @@
-name: Test Video Converter SDK
+name: Test Video Converter SDK final
 
 on:
   workflow_dispatch:
