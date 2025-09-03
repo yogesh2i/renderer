@@ -43,32 +43,29 @@ export function useVideoOverlay(defaultData: {
     setConversionError(null);
 
     try {
-      const response = await fetch('/api/iframeToVideo', {
+      const response = await fetch('/api/convertUrl', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          urls: defaultData.videos.map((video) => video.media_url),
-          duration: 10
-        })
+        body: JSON.stringify(defaultData)
       });
 
       const result = await response.json();
 
-      if (result.success) {
-        const updatedVideos = defaultData.videos.map((video) => {
-          const convertedVideo = result.results.find((convertedVid: any) =>
-            convertedVid.originalUrl === video.media_url
-          );
-          return {
-            ...video,
-            videoUrl: convertedVideo ? convertedVideo.videoUrl : null,
-            isConverted: !!convertedVideo
-          };
-        });
-        setVideosWithConverted(updatedVideos);
-      } else {
-        setConversionError(result.error);
-      }
+      // if (result.success) {
+      //   const updatedVideos = defaultData.videos.map((video) => {
+      //     const convertedVideo = result.results.find((convertedVid: any) =>
+      //       convertedVid.originalUrl === video.media_url
+      //     );
+      //     return {
+      //       ...video,
+      //       videoUrl: convertedVideo ? convertedVideo.videoUrl : null,
+      //       isConverted: !!convertedVideo
+      //     };
+      //   });
+      //   setVideosWithConverted(updatedVideos);
+      // } else {
+      //   setConversionError(result.error);
+      // }
     } catch (error) {
       setConversionError('Failed to convert URLs');
     } finally {

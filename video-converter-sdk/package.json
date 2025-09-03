@@ -1,0 +1,30 @@
+{
+  "name": "video-converter-sdk",
+  "version": "1.0.0",
+  "description": "SDK for converting web animation URLs to MP4 videos with JSON input/output",
+  "main": "index.js",
+  "bin": {
+    "video-converter": "./cli.js"
+  },
+  "scripts": {
+    "test": "node examples/basic-usage.js",
+    "cli": "node cli.js"
+  },
+  "keywords": [
+    "video",
+    "converter",
+    "animation",
+    "playwright",
+    "ffmpeg"
+  ],
+  "author": "Video Converter Team",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "fluent-ffmpeg": "^2.1.2",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

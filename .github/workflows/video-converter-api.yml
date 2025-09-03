@@ -1,0 +1,261 @@
+name: Video Converter API
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Unique job ID for tracking'
+        required: false
+        type: string
+      config:
+        description: 'SDK configuration (JSON)'
+        required: false
+        type: string
+        default: |
+          {
+            "fps": 30,
+            "duration": 10,
+            "timeout": 300000,
+            "budgetMultiplier": 1
+          }
+      input_json:
+        description: 'Video conversion input (JSON)'
+        required: true
+        type: string
+  
+  # API webhook trigger
+  repository_dispatch:
+    types: [video-conversion-api]
+
+jobs:
+  convert-videos-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'video-converter-sdk/package.json'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libnss3 \
+          libatk-bridge2.0-0 \
+          libdrm2 \
+          libxkbcommon0 \
+          libgbm1 \
+          libasound2 \
+          xvfb
+          
+    - name: Install SDK dependencies
+      working-directory: ./video-converter-sdk
+      run: |
+        npm ci
+        npx playwright install chromium
+        
+    - name: Parse input and config
+      id: parse-input
+      run: |
+        # Generate job ID if not provided
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          JOB_ID="${{ github.event.inputs.job_id }}"
+          CONFIG_JSON='${{ github.event.inputs.config }}'
+          INPUT_JSON='${{ github.event.inputs.input_json }}'
+        else
+          JOB_ID="${{ github.event.client_payload.job_id }}"
+          CONFIG_JSON='${{ toJson(github.event.client_payload.config) }}'
+          INPUT_JSON='${{ toJson(github.event.client_payload.input) }}'
+        fi
+        
+        # Set default job ID if empty
+        if [ -z "$JOB_ID" ]; then
+          JOB_ID="job-$(date +%Y%m%d-%H%M%S)-${{ github.run_id }}"
+        fi
+        
+        echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+        
+        # Save files
+        echo "$CONFIG_JSON" > config.json
+        echo "$INPUT_JSON" > input.json
+        
+        echo "📋 Job ID: $JOB_ID"
+        echo "⚙️ Config:"
+        echo "$CONFIG_JSON" | jq .
+        echo "📄 Input:"
+        echo "$INPUT_JSON" | jq .
+        
+    - name: Create dynamic CLI script
+      run: |
+        cat > video-converter-sdk/dynamic-cli.js << 'EOF'
+        const VideoConverterSDK = require('./index');
+        const fs = require('fs').promises;
+        
+        async function main() {
+          try {
+            // Read config and input
+            const config = JSON.parse(await fs.readFile('../config.json', 'utf-8'));
+            const inputJSON = JSON.parse(await fs.readFile('../input.json', 'utf-8'));
+            
+            console.log('🎬 Video Converter SDK - Dynamic CLI');
+            console.log('===================================');
+            console.log('📊 Videos to process:', inputJSON.videos?.length || 0);
+            
+            // Merge default config with custom config
+            const sdkConfig = {
+              outputDir: './public/converted-videos',
+              tempDir: './temp',
+              screenshotDir: './temp/screenshots',
+              baseUrl: inputJSON.base_url || 'http://localhost:3000',
+              ...config
+            };
+            
+            console.log('⚙️ SDK Config:', JSON.stringify(sdkConfig, null, 2));
+            
+            const sdk = new VideoConverterSDK(sdkConfig);
+            
+            const startTime = Date.now();
+            const result = await sdk.convert(inputJSON);
+            const duration = (Date.now() - startTime) / 1000;
+            
+            console.log(`✅ Conversion completed in ${duration.toFixed(2)}s`);
+            
+            // Enhanced result with metadata
+            const enhancedResult = {
+              ...result,
+              metadata: {
+                job_id: process.env.JOB_ID,
+                duration_seconds: Number(duration.toFixed(2)),
+                processed_videos: result.videos?.length || 0,
+                timestamp: new Date().toISOString(),
+                github_run_id: process.env.GITHUB_RUN_ID,
+                github_run_url: `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+              }
+            };
+            
+            await sdk.cleanup();
+            
+            // Output results
+            console.log('📤 Final Result:');
+            console.log(JSON.stringify(enhancedResult, null, 2));
+            
+            await fs.writeFile('../output.json', JSON.stringify(enhancedResult, null, 2));
+            
+            process.exit(0);
+            
+          } catch (error) {
+            console.error('❌ Error:', error.message);
+            
+            const errorResult = {
+              error: true,
+              message: error.message,
+              stack: error.stack,
+              metadata: {
+                job_id: process.env.JOB_ID,
+                timestamp: new Date().toISOString(),
+                github_run_id: process.env.GITHUB_RUN_ID
+              }
+            };
+            
+            console.log('📤 Error Result:');
+            console.log(JSON.stringify(errorResult, null, 2));
+            
+            await fs.writeFile('../output.json', JSON.stringify(errorResult, null, 2));
+            process.exit(1);
+          }
+        }
+        
+        main();
+        EOF
+        
+    - name: Create output directories
+      run: |
+        mkdir -p public/converted-videos
+        mkdir -p temp/screenshots
+        
+    - name: Run video conversion with virtual display
+      working-directory: ./video-converter-sdk
+      env:
+        GITHUB_ACTIONS: true
+        JOB_ID: ${{ steps.parse-input.outputs.job_id }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        DISPLAY: ':99'
+      run: |
+        # Start virtual display for browser
+        Xvfb :99 -screen 0 1920x1080x24 > /dev/null 2>&1 &
+        sleep 2
+        
+        echo "🎬 Starting video conversion with job ID: $JOB_ID"
+        node dynamic-cli.js
+        
+    - name: Process results
+      id: results
+      run: |
+        if [ -f output.json ]; then
+          echo "✅ Conversion completed successfully"
+          
+          # Extract key metrics
+          SUCCESS=$(jq -r '.error // false' output.json)
+          VIDEO_COUNT=$(jq -r '.videos | length' output.json 2>/dev/null || echo "0")
+          DURATION=$(jq -r '.metadata.duration_seconds // 0' output.json)
+          JOB_ID=$(jq -r '.metadata.job_id // "unknown"' output.json)
+          
+          echo "success=$([ "$SUCCESS" = "false" ] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+          echo "video_count=$VIDEO_COUNT" >> $GITHUB_OUTPUT
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "job_id=$JOB_ID" >> $GITHUB_OUTPUT
+          
+          # Create job summary
+          echo "## 🎬 Video Conversion Results" >> $GITHUB_STEP_SUMMARY
+          echo "- **Job ID**: $JOB_ID" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: $([ "$SUCCESS" = "false" ] && echo "✅ Success" || echo "❌ Failed")" >> $GITHUB_STEP_SUMMARY
+          echo "- **Videos Processed**: $VIDEO_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "- **Duration**: ${DURATION}s" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Full Output:" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat output.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+        else
+          echo "❌ No output file generated"
+          exit 1
+        fi
+        
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: video-results-${{ steps.parse-input.outputs.job_id }}
+        path: |
+          public/converted-videos/
+          output.json
+          config.json
+          input.json
+        retention-days: 14
+        
+    - name: Upload debug info on failure
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: debug-${{ steps.parse-input.outputs.job_id }}
+        path: |
+          temp/
+          video-converter-sdk/*.log
+        retention-days: 7
+        
+    outputs:
+      result: ${{ steps.results.outputs.success == 'true' && 'success' || 'failure' }}
+      job_id: ${{ steps.results.outputs.job_id }}
+      video_count: ${{ steps.results.outputs.video_count }}
+      duration: ${{ steps.results.outputs.duration }}
+      artifact_name: video-results-${{ steps.parse-input.outputs.job_id }}

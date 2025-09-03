@@ -1,0 +1,144 @@
+name: Video Converter SDK Job
+
+on:
+  workflow_dispatch:
+    inputs:
+      input_json:
+        description: 'JSON input for video conversion'
+        required: true
+        type: string
+        default: |
+          {
+            "base_url": "https://example.com/original-video.mp4",
+            "videos": [
+              {
+                "media_url": "https://project-ai-workforce-progress-animation-882.magicpatterns.app/",
+                "start_frame": 1,
+                "end_frame": 90
+              }
+            ]
+          }
+      output_artifact_name:
+        description: 'Name for the output artifact'
+        required: false
+        type: string
+        default: 'converted-videos'
+
+  # Also allow triggering via API/webhook
+  repository_dispatch:
+    types: [video-conversion]
+
+jobs:
+  convert-videos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'video-converter-sdk/package.json'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libnss3 \
+          libatk-bridge2.0-0 \
+          libdrm2 \
+          libxkbcommon0 \
+          libgbm1 \
+          libasound2
+          
+    - name: Install SDK dependencies
+      working-directory: ./video-converter-sdk
+      run: |
+        npm ci
+        # Install Playwright browsers
+        npx playwright install chromium
+        
+    - name: Prepare input JSON
+      run: |
+        # Handle both manual workflow dispatch and API trigger
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          INPUT_JSON='${{ github.event.inputs.input_json }}'
+        else
+          # For repository_dispatch, expect JSON in event payload
+          INPUT_JSON='${{ toJson(github.event.client_payload) }}'
+        fi
+        
+        echo "Input JSON received:"
+        echo "$INPUT_JSON" | jq .
+        
+        # Save input to file
+        echo "$INPUT_JSON" > input.json
+        
+    - name: Create output directories
+      run: |
+        mkdir -p public/converted-videos
+        mkdir -p temp/screenshots
+        
+    - name: Run video conversion
+      working-directory: ./video-converter-sdk
+      env:
+        GITHUB_ACTIONS: true
+        OUTPUT_FILE: ../output.json
+      run: |
+        echo "🎬 Starting video conversion..."
+        node cli.js ../input.json
+        
+    - name: Verify output
+      run: |
+        if [ -f output.json ]; then
+          echo "✅ Output file created successfully"
+          echo "📊 Output JSON:"
+          cat output.json | jq .
+        else
+          echo "❌ No output file found"
+          exit 1
+        fi
+        
+    - name: Upload converted videos
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ${{ github.event.inputs.output_artifact_name || github.event.client_payload.output_artifact_name || 'converted-videos' }}
+        path: |
+          public/converted-videos/
+          output.json
+        retention-days: 7
+        
+    - name: Upload debug logs
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: debug-logs-${{ github.run_id }}
+        path: |
+          temp/
+          *.log
+        retention-days: 3
+        
+    - name: Set output
+      if: success()
+      id: conversion-result
+      run: |
+        # Set the JSON output as a step output for downstream jobs
+        OUTPUT_JSON=$(cat output.json)
+        echo "result<<EOF" >> $GITHUB_OUTPUT
+        echo "$OUTPUT_JSON" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        # Also set as job summary
+        echo "## 🎬 Video Conversion Results" >> $GITHUB_STEP_SUMMARY
+        echo '```json' >> $GITHUB_STEP_SUMMARY
+        echo "$OUTPUT_JSON" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        
+    outputs:
+      result: ${{ steps.conversion-result.outputs.result }}
+      success: ${{ steps.conversion-result.conclusion == 'success' }}
